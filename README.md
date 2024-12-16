@@ -16,10 +16,6 @@ Tento bot umožňuje skrze [bakapi-v2](https://github.com/MortikCZ/bakapi-v2), k
 ## Konfigurace
 Ve složce s botem je před jeho prvním spuštěním nutné vytvořit soubor `config.json`.
 ```json
-{
-    "bot": {
-
-```json
     {
     "bot": {
         "token": "token bota"
