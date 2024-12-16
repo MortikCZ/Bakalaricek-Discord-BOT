@@ -1,26 +1,24 @@
-# Bakalaricek Discord Bot
-Discord Bot pro zobrazování suplování, aktuálního rozvrhu a jeho změn z Bakalářů v jazyce Python.
+<div align="center">
 
-Tento bot umožňuje skrze [bakapi-v2](https://github.com/MortikCZ/bakapi-v2), komunikovat s Bakaláři API a získavat informace o suplování, dokáže v předem určeném kanálu zobrazovat suplování pro aktuální týden a posílat upozornění na změny v rozvrhu.
+<h1>Bakalaricek Discord Bot</h1>
 
-## Požadavky
-- Prostor pro hostování bota (např. VPS, Raspberry Pi, atd.) s nainstalovaným Pythonem.
-- Příhlašovací údaje k Bakalářům (uživatelské jméno a heslo).
-- URL adresa příhlašovací stránky Bakalářů.
-- Discord Bot Token.
+![GitHub License](https://img.shields.io/github/license/MortikCZ/Bakalaricek-Discord-Bot)
+![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/MortikCZ/Bakalaricek-Discord-Bot)
+![GitHub last commit](https://img.shields.io/github/last-commit/MortikCZ/Bakalaricek-Discord-Bot)
 
-## Instalace
-1. Stáhněte si repozitář
-```
-    git clone https://github.com/MortikCZ/Bakalaricek-Discord-BOT.git
-    cd Bakalaricek-Discord-BOT
-```
-2. Nainstalujte závislosti
-```
-    pip install -r requirements.txt
-```
-3. Konfigurace
-    - Vytvořte soubor `config.json` podle této šablony
+<p>Discord Bot pro zobrazování suplování, aktuálního rozvrhu a jeho změn z Bakalářů v jazyce Python.</p>
+
+</div>
+
+ #
+Tento bot umožňuje skrze [bakapi-v2](https://github.com/MortikCZ/bakapi-v2), komunikovat s Bakaláři API a získavat informace o suplování, dokáže v předem určeném kanálu zobrazovat suplování a rozvrh pro aktuální týden a posílat upozornění na změny v rozvrhu.
+
+## Konfigurace
+Ve složce s botem je před jeho prvním spuštěním nutné vytvořit soubor `config.json`.
+```json
+{
+    "bot": {
+
 ```json
     {
     "bot": {
@@ -37,12 +35,11 @@ Tento bot umožňuje skrze [bakapi-v2](https://github.com/MortikCZ/bakapi-v2), k
         "subst_change_channel_id": kanál pro oznámení změn v rozvrhu,
         "subst_change_role_id": role pro oznámení změn v rozvrhu
     }
-```
-5. Spusťte bota
-```
-    py main.py
+
 ```
 ## Changelog
+### 0.4
+- Nově bot dokáže posílat oznámení jak pro aktuální, tak příští týden.
 ### 0.3
 - Status se nově ukládá do souboru `config.json` a při restartu bota se načte poslední status.
 ### 0.2

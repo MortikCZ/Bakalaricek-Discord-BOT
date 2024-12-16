@@ -26,8 +26,8 @@ bot = commands.Bot(command_prefix='/', intents=intents)
 @bot.event
 async def on_ready():
     substitutions_embed.start()
-    check_timetable.start()
     daily_timetable_embed.start()
+    substitutions_notify.start()
     if 'status' in config['bot']:
         await bot.change_presence(activity=discord.Game(name=config['bot']['status']))
 
@@ -41,19 +41,30 @@ def save_config(config):
     with open('config.json', 'w') as config_file:
         json.dump(config, config_file, indent=4)
 
-PREVIOUS_TIMETABLE_FILE = 'previous_timetable.json'
+CURRENT_WEEK_FILE = 'current_week_substitutions.json'
+NEXT_WEEK_FILE = 'next_week_substitutions.json'
 
-def load_previous_timetable():
-    if os.path.exists(PREVIOUS_TIMETABLE_FILE):
-        with open(PREVIOUS_TIMETABLE_FILE, 'r') as file:
+def load_json(file_path):
+    if os.path.exists(file_path):
+        with open(file_path, 'r', encoding='utf-8') as file:
             return json.load(file)
-    return None
+    return {}
 
-def save_previous_timetable(timetable):
-    with open(PREVIOUS_TIMETABLE_FILE, 'w') as file:
-        json.dump(timetable, file, indent=4)
+def save_json(file_path, data):
+    with open(file_path, 'w', encoding='utf-8') as file:
+        json.dump(data, file, ensure_ascii=False, indent=4)
 
-previous_timetable = load_previous_timetable()
+STATUS_FILE = 'week_change_status.json'
+
+def load_week_change_status():
+    if not os.path.exists(STATUS_FILE):
+        save_week_change_status(True)
+    with open(STATUS_FILE, 'r') as file:
+        return json.load(file).get('week_changed', False)
+
+def save_week_change_status(status):
+    with open(STATUS_FILE, 'w') as file:
+        json.dump({'week_changed': status}, file)
 
 @tasks.loop(minutes=30)
 async def daily_timetable_embed():
@@ -144,6 +155,7 @@ async def substitutions_embed():
         if date_object.isocalendar()[1] != week_number:
             continue
         date = f"{date_object.strftime('%d.%m.')}"
+
         hour_number = f"🕑 {change['Hours']}"
         description = change['Description']
         changes_by_date[date].append(f"{hour_number} - {description}")
@@ -169,60 +181,79 @@ async def substitutions_embed():
         save_config(config)
 
 @tasks.loop(minutes=30)
-async def check_timetable():
-    global previous_timetable
-
+async def substitutions_notify():
     current_date = datetime.today().date()
 
-    if current_date.weekday() > 4:  
-        days_ahead = 7 - current_date.weekday()  
-        current_date = current_date + timedelta(days_ahead)
+    if current_date.weekday() == 0 and datetime.now().hour == 23 and datetime.now().minute >= 30:  
+        save_week_change_status(False) 
 
-    current_date_str = current_date.strftime("%Y-%m-%d")
-    current_date_display = current_date.strftime("%d.%m.")
+    week_changed = load_week_change_status()
+    if current_date.weekday() == 0 and not week_changed:
+        week_change
+        save_week_change_status(True) 
+    
+    global current_week_substitutions, next_week_substitutions
+    next_week_date = current_date + timedelta(days=(7 - current_date.weekday()))
 
-    timetable = bakalari_user.get_timetable_actual(date=current_date_str)
+    substitutions = bakalari_user.get_substitutions()
+    current_week_subs = {change['Day']: change for change in substitutions['Changes'] if datetime.fromisoformat(change['Day'].replace("Z", "+00:00")).isocalendar()[1] == current_date.isocalendar()[1]}
+    next_week_subs = {change['Day']: change for change in substitutions['Changes'] if datetime.fromisoformat(change['Day'].replace("Z", "+00:00")).isocalendar()[1] == next_week_date.isocalendar()[1]}
 
-    changes = []
-    for day in timetable['Days']:
-        for atom in day['Atoms']:
-            if atom.get('Change'):
-                changes.append({
-                    'Date': day['Date'],
-                    'HourId': atom['HourId'],
-                    'Change': atom['Change'],
-                    'Description': atom.get('Description', 'No description')
-                })
+    current_week_data = load_json(CURRENT_WEEK_FILE)
+    next_week_data = load_json(NEXT_WEEK_FILE)
 
-    if previous_timetable is not None:
-        new_changes = [change for change in changes if change not in previous_timetable]
-    else:
-        new_changes = changes
+    new_changes = [change for day, change in current_week_subs.items() if day not in current_week_data or current_week_data[day] != change]
+    new_next_week_changes = [change for day, change in next_week_subs.items() if day not in next_week_data or next_week_data[day] != change]
 
     if new_changes:
         channel = bot.get_channel(SUBST_CHANGE_CHANNEL_ID)
         role_id = config['discord']['subst_change_role_id']
         role_mention = f"<@&{role_id}>"
         for change in new_changes:
-            date = change['Date'].split('T')[0]
+            date = change['Day'].split('T')[0]
             formatted_date = datetime.strptime(date, "%Y-%m-%d").strftime("%d.%m.")
-            hour_id = change['HourId']
-            change_details = change['Change']
-            change_day = datetime.strptime(change_details.get('Day', 'Unknown day').split('T')[0], "%Y-%m-%d").strftime("%d.%m.")
-            change_hours = change_details.get('Hours', 'Unknown hours')
-            change_description = change_details.get('Description', 'No description')
+            hour_number = f"🕑 {change['Hours']}"
+            description = change['Description']
             message = (
                 f"{role_mention}\n"
                 f"# Nová změna v rozvrhu!\n"
-                f"**Datum:** {change_day}\n"
-                f"**Číslo hodiny:** {change_hours}\n"
-                f"**Popis:** {change_description}"
+                f"**Datum:** {formatted_date}\n"
+                f"**Číslo hodiny:** {hour_number}\n"
+                f"**Popis:** {description}"
             )
             await channel.send(message)
 
-    previous_timetable = changes
-    save_previous_timetable(previous_timetable)
+    if new_next_week_changes:
+        channel = bot.get_channel(SUBST_CHANGE_CHANNEL_ID)
+        role_id = config['discord']['subst_change_role_id']
+        role_mention = f"<@&{role_id}>"
+        for change in new_next_week_changes:
+            date = change['Day'].split('T')[0]
+            formatted_date = datetime.strptime(date, "%Y-%m-%d").strftime("%d.%m.")
+            hour_number = f"🕑 {change['Hours']}"
+            description = change['Description']
+            message = (
+                f"{role_mention}\n"
+                f"# Změna v rozvrhu pro příští týden!\n"
+                f"**Datum:** {formatted_date}\n"
+                f"**Číslo hodiny:** {hour_number}\n"
+                f"**Popis:** {description}"
+            )
+            await channel.send(message)
 
+    save_json(CURRENT_WEEK_FILE, current_week_subs)
+    save_json(NEXT_WEEK_FILE, next_week_subs)
+
+def week_change(ctx):
+    if os.path.exists(CURRENT_WEEK_FILE):
+        os.remove(CURRENT_WEEK_FILE)
+    if os.path.exists(NEXT_WEEK_FILE):
+        os.rename(NEXT_WEEK_FILE, CURRENT_WEEK_FILE)
+    next_week_subs = bakalari_user.get_substitutions()
+    next_week_date = datetime.today().date() + timedelta(days=(7 - datetime.today().date().weekday()))
+    next_week_subs = {change['Day']: change for change in next_week_subs['Changes'] if datetime.fromisoformat(change['Day'].replace("Z", "+00:00")).isocalendar()[1] == next_week_date.isocalendar()[1]}
+    save_json(NEXT_WEEK_FILE, next_week_subs)
+    
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def status(ctx, *, new_status: str):
